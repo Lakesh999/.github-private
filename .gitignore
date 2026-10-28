@@ -1,0 +1,37 @@
+# Hugh .NET build artifacts
+Hugh/bin/
+Hugh/obj/
+Hugh.Tests/bin/
+Hugh.Tests/obj/
+
+# Published output
+publish/
+
+# Orchestration state
+Hugh/.orchestrator/
+
+# Installer output
+dist/*.exe
+!dist/.gitkeep
+
+# Logs
+Hugh/logs/
+
+# Playwright MCP screenshots
+.playwright-mcp/
+
+# Common .NET build artifacts
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio
+.vs/
+
+# JetBrains Rider
+.idea/
+
+# OS files
+Thumbs.db
+.DS_Store

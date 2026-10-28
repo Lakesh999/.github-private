@@ -1,0 +1,89 @@
+name: Release Hugh
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Restore dependencies
+        run: dotnet restore Hugh/Hugh.csproj
+
+      - name: Run tests
+        run: dotnet test Hugh.Tests/Hugh.Tests.csproj --configuration Release --no-restore --filter "Category!=LiveSdk&Category!=E2E"
+
+      - name: Publish x64
+        shell: pwsh
+        run: |
+          dotnet publish Hugh/Hugh.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:Version=${{ steps.version.outputs.VERSION }} `
+            -o ./publish/win-x64
+
+      - name: Create dist directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path ./dist
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          # Copy agents folder as fallback for offline users (auto-discovery preferred at runtime)
+          if (Test-Path ./agents) {
+            Copy-Item -Path ./agents -Destination ./publish/win-x64/agents -Recurse
+          }
+          Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./dist/hugh-portable-${{ steps.version.outputs.VERSION }}-win-x64.zip
+
+      - name: Build Installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.4
+        with:
+          path: installer/hugh-setup.iss
+          options: /DMyAppVersion=${{ steps.version.outputs.VERSION }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Hugh v${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/hugh-setup-${{ steps.version.outputs.VERSION }}.exe
+            dist/hugh-portable-${{ steps.version.outputs.VERSION }}-win-x64.zip
+          generate_release_notes: true
